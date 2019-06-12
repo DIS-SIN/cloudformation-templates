@@ -1,0 +1,380 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "vpc0741528f50ad584b6": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "172.31.0.0/16",
+        "InstanceTenancy": "default",
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "true",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ec2-temp-vpc"
+          }
+        ]
+      }
+    },
+    "subnet09b92a67e0c4ff939": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": "172.31.16.0/20",
+        "AvailabilityZone": "ca-central-1a",
+        "VpcId": {
+          "Ref": "vpc0741528f50ad584b6"
+        }
+      }
+    },
+    "subnet086158a16391b1677": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": "172.31.0.0/20",
+        "AvailabilityZone": "ca-central-1b",
+        "VpcId": {
+          "Ref": "vpc0741528f50ad584b6"
+        }
+      }
+    },
+    "igw0e9664482247cd10e": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+      }
+    },
+    "dopt0dc704a2f32abe470": {
+      "Type": "AWS::EC2::DHCPOptions",
+      "Properties": {
+        "DomainName": "ca-central-1.compute.internal",
+        "DomainNameServers": [
+          "AmazonProvidedDNS"
+        ]
+      }
+    },
+    "acl01ba13a87513bea18": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "vpc0741528f50ad584b6"
+        }
+      }
+    },
+    "rtb093f793767b124d9c": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "vpc0741528f50ad584b6"
+        }
+      }
+    },
+    "rtb0adc74fec2b132bb0": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": "vpc-0fbdfaa5aa84aab6e",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Public Subnets"
+          },
+          {
+            "Key": "Network",
+            "Value": "Public"
+          },
+          {
+            "Key": "AWS_Solutions",
+            "Value": "LandingZoneStackSet"
+          }
+        ]
+      }
+    },
+    "instancei098a64dce6265e8e2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "DisableApiTermination": "false",
+        "InstanceInitiatedShutdownBehavior": "stop",
+        "ImageId": "ami-08a9b721ecc5b0a53",
+        "InstanceType": "t2.medium",
+        "KeyName": "practicum-default-keypair",
+        "Monitoring": "false",
+        "Tags": [
+          {
+            "Key": "Practicum",
+            "Value": "True"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "DeleteOnTermination": "true",
+            "DeviceIndex": 0,
+            "SubnetId": {
+              "Ref": "subnet086158a16391b1677"
+            },
+            "PrivateIpAddresses": [
+              {
+                "PrivateIpAddress": "172.31.1.84",
+                "Primary": "true"
+              }
+            ],
+            "GroupSet": [
+              {
+                "Ref": "sgec2tempsg"
+              }
+            ],
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      }
+    },
+    "topicLZNotify": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": "LZNotify",
+        "Subscription": [
+          {
+            "Endpoint": "arn:aws:lambda:ca-central-1:596664304429:function:LandingZoneLocalSNSNotificationForwarder",
+            "Protocol": "lambda"
+          }
+        ]
+      }
+    },
+    "sgec2tempsg": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "launch-wizard-11 created 2019-06-12T10:34:32.449-03:00",
+        "VpcId": {
+          "Ref": "vpc0741528f50ad584b6"
+        }
+      }
+    },
+    "snspolicyLZNotify": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "topicLZNotify"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2008-10-17",
+          "Statement": [
+            {
+              "Sid": "__default_statement_ID",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Action": [
+                "SNS:GetTopicAttributes",
+                "SNS:SetTopicAttributes",
+                "SNS:AddPermission",
+                "SNS:RemovePermission",
+                "SNS:DeleteTopic",
+                "SNS:Subscribe",
+                "SNS:ListSubscriptionsByTopic",
+                "SNS:Publish",
+                "SNS:Receive"
+              ],
+              "Resource": {
+                "Ref": "topicLZNotify"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceOwner": "596664304429"
+                }
+              }
+            },
+            {
+              "Sid": "TrustCWEToPublishEventsToMyTopic",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sns:Publish",
+              "Resource": {
+                "Ref": "topicLZNotify"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "alarmCloudTrailEC2InstanceChanges": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "ActionsEnabled": "true",
+        "AlarmDescription": "Alarms when an API call is made to create, terminate, start, stop or reboot an EC2 instance.",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "MetricName": "EC2InstanceEventCount",
+        "Namespace": "CloudTrailMetrics",
+        "Period": "300",
+        "Statistic": "Sum",
+        "Threshold": "1.0",
+        "AlarmActions": [
+          "arn:aws:sns:ca-central-1:596664304429:AWS-Landing-Zone-Security-Notification"
+        ]
+      }
+    },
+    "alarmCloudTrailEC2LargeInstanceChanges": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "ActionsEnabled": "true",
+        "AlarmDescription": "Alarms when an API call is made to create, terminate, start, stop or reboot a 4x, 8x, 9x, 10x, 12x, 16x, 18x, 24x, 32x-large EC2 instance.",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "MetricName": "EC2LargeInstanceEventCount",
+        "Namespace": "CloudTrailMetrics",
+        "Period": "300",
+        "Statistic": "Sum",
+        "Threshold": "1.0",
+        "AlarmActions": [
+          "arn:aws:sns:ca-central-1:596664304429:AWS-Landing-Zone-Security-Notification"
+        ]
+      }
+    },
+    "acl1": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": "true",
+        "Protocol": "-1",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "NetworkAclId": {
+          "Ref": "acl01ba13a87513bea18"
+        }
+      }
+    },
+    "acl2": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Protocol": "-1",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "NetworkAclId": {
+          "Ref": "acl01ba13a87513bea18"
+        }
+      }
+    },
+    "subnetacl1": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "acl01ba13a87513bea18"
+        },
+        "SubnetId": {
+          "Ref": "subnet086158a16391b1677"
+        }
+      }
+    },
+    "subnetacl2": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "acl01ba13a87513bea18"
+        },
+        "SubnetId": {
+          "Ref": "subnet09b92a67e0c4ff939"
+        }
+      }
+    },
+    "gw1": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "vpc0741528f50ad584b6"
+        },
+        "InternetGatewayId": {
+          "Ref": "igw0e9664482247cd10e"
+        }
+      }
+    },
+    "subnetroute2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "rtb0adc74fec2b132bb0"
+        },
+        "SubnetId": "subnet-0d72ed53f69838a96"
+      }
+    },
+    "subnetroute3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "rtb0adc74fec2b132bb0"
+        },
+        "SubnetId": "subnet-0add22100ba4732ef"
+      }
+    },
+    "route1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "rtb093f793767b124d9c"
+        },
+        "GatewayId": {
+          "Ref": "igw0e9664482247cd10e"
+        }
+      },
+      "DependsOn": "gw1"
+    },
+    "route2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "rtb0adc74fec2b132bb0"
+        },
+        "GatewayId": "igw-0e036cf4202449a66"
+      }
+    },
+    "dchpassoc1": {
+      "Type": "AWS::EC2::VPCDHCPOptionsAssociation",
+      "Properties": {
+        "VpcId": {
+          "Ref": "vpc0741528f50ad584b6"
+        },
+        "DhcpOptionsId": {
+          "Ref": "dopt0dc704a2f32abe470"
+        }
+      }
+    },
+    "ingress1": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "sgec2tempsg"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "80",
+        "ToPort": "80",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ingress2": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "sgec2tempsg"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "22",
+        "ToPort": "22",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "egress1": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "sgec2tempsg"
+        },
+        "IpProtocol": "-1",
+        "CidrIp": "0.0.0.0/0"
+      }
+    }
+  },
+  "Description": "EC2-Aurora-MySQL"
+}
